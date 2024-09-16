@@ -256,10 +256,18 @@ Golly, **what a headache**. It seems to me that separating the portion of memory
 track of control (execution) from the *data* data is a good idea. Lets take a look at how memory is laid out for a
 typical process.
 
-<p align="center">
-    <img align="center" src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
-</p>
+<img align="center" src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
 
+There's a few notable things about the layouts of unix/windows processes:
+
+- In windows, the stack grows towards low memory addresses. Note that this means that the (virtual) memory address 0 is
+the absolute limit for the stack size.
+- In unix, the stack grows towards the heap. This means the "absolulte largest size the stack can be" is a bit less
+obvious. It depends on the size of the heap.
+- In windows, "Program Image" roughly equates to ".Text" + ".Data" + ".BSS" in unix.
+- "Kernel Memory" in both refers to the memory that the operating system occupies. The kernel memory is in a processes
+virtual memory map for syscalls (I.e., wrappers for "secure methods" of interacting with the operating system that
+requires permission elevation).
 
 
 
