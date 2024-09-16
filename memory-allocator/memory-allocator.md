@@ -257,7 +257,7 @@ track of control (execution) from the *data* data is a good idea. Lets take a lo
 typical process.
 
 <p align="center">
-    <img src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
+    <img align="center" src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
 </p>
 
 
