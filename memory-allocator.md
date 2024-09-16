@@ -250,12 +250,9 @@ So what other ideas do we have to solve this problem of *dynamic memory allocati
 
 ## Dynamic memory allocation
 
-
-
-
-
-
-Golly, **what a headache**.
+Golly, **what a headache**. It seems to me that separating the portion of memory that seems to be good for keeping
+track of control (execution) from the *data* data is a good idea. Lets take a look at how memory is laid out for a
+typical process.
 
 
 
@@ -267,8 +264,10 @@ Golly, **what a headache**.
 
 
 
-
-
+//put this somewhere?
+The "adopting" concept doesn't seem great, because
+the natural behavior of the stack makes it so that the lifetime of an object is the same as the lifetime of the
+function that created that object, and sometimes we want it to last longer.
 
 
 
