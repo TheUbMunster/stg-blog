@@ -256,6 +256,7 @@ Golly, **what a headache**. It seems to me that separating the portion of memory
 track of control (execution) from the *data* data is a good idea. Lets take a look at how memory is laid out for a
 typical process.
 
+![Diagram of the memory layout of processes on unix & windows](./ProcessLayoutWinUnix.png)
 
 
 
