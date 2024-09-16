@@ -338,7 +338,6 @@ You'll notice that we allocate memory in terms of `pageCount`, which isn't that 
 working with requests in terms of `bytes`, we need a way to know how large a page is on the given platform. Here's how
 I did that.
 
-
 ```c
 size_t p_size()
 {
@@ -364,9 +363,19 @@ fast, and doesn't have too many system calls. Even with the fanciest of operatin
 the size of pages on your system would require a system reboot. Thus, we only need to check the page size once (via a
 syscall), and we cache it in a static local and return that cached value for all subsequent calls.
 
+Getting on to the algorithm itself,
 
+## Conclusion
 
+You can find a full implementation of my heap at https://github.com/TheUbMunster/stg-heap. If this is something you
+choose to undertake, there are several tutorials on the internet about it that talk about the decision making processes
+and many examples to learn from. Make sure to put your own spin on it. Try out an optimization, or a different
+management scheme, perhaps you'll discover something new! A peer of mine not too long ago discovered a management
+scheme that decreases the cost of overall allocations, and people out there are already implementing this scheme[^69]!
 
+Good luck!
+
+## Footnotes
 
 [^1]: A stack frame is the portion of the stack that stores data pertaining to an instance of a function call. Even if
 e.g. `bar()` is called, and then `bar()` calls itself again, the two instances of the `bar()` calls each have their own
@@ -431,11 +440,11 @@ WSL). Maybe you could write a native ELF executor for windows, or maybe a native
 
 [^14]: `malloc()` assumes it has full control of `s/brk()`, so any intermixed calls will lead to invalid program state.
 
-[^15]: https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods
+[^15]: [Microsoft docs](https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods).
 
 [^16]: Thrashing refers to a scenario where the underlying implementation of a collection that gets repeatedly added
 to and removed from causes repeated expensive operations relating to memory (re)allocation/deallocation (in this case,
-repeated calls to `s/brk()` or `VirtualAlloc()`).
+repeated calls to `s/brk()` or internal heap manipulation caused by `HeapAlloc()`).
 
 [^17]: POSIX is a collection of features/API that different operating systems can implement for ease of cross-platform
 development and intercompatibility. Many versions of unix are fully/partially POSIX compliant, including linux and
@@ -446,5 +455,7 @@ size, but there are several sizes that you can set.
 
 [^19]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
 to utilize the resource (but it is avaliable if you need it).
+
+[^69]: [Link to paper](https://arxiv.org/abs/2204.10455).
 
 # Talk about how the stack hasn't always existed?
