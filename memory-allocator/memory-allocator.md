@@ -49,11 +49,11 @@ the key, and the way a computer approaches this issue is could be similar to how
 
 Let's say at the beginning of `main()`, you took out your dry-erase marker and got busy. At the bottom of your
 whiteboard you labeled "main" (denoting that everything above "main" pertains to the stack frame of main[^1], unless
-superceeded by another label). Then, above "main" you wrote the labels `x` and `y` (bottom to top[^5]) in black marker.
-Then, upon the first assignment to `x` and `y`, you write their values to the right of `x` and `y` in blue marker[^2].
+superceeded by another label). Then, above "main" you wrote the labels `x` and `y` (bottom to top[^2]) in black marker.
+Then, upon the first assignment to `x` and `y`, you write their values to the right of `x` and `y` in blue marker[^3].
 As you perform `//some stuff...`, possibly utilizing and/or manipulating the values in these variables, it's now time
 to execute `foo()`. Since you've recorded the variables and their values on the whiteboard, we fortunately don't have
-to rely on your poor short-term memory[^3].
+to rely on your poor short-term memory[^4].
 
 At this point, your whiteboard looks something like this:
 ```
@@ -70,7 +70,7 @@ this function was called from to continue working on the program (in this case, 
 the purpose of `foo()` was to fulfill a task, and now that we're done, any text on the whiteboard corresponding to this
 call to `foo()` (i.e., its stack frame) can be erased, since we're done with it.
 
-Note that any creation of data (compiler optimizations aside[^4]) results of stuff getting put on the stack. Here's an
+Note that any creation of data (compiler optimizations aside[^5]) results of stuff getting put on the stack. Here's an
 expanded example of `main()` above, each significant line of code has an accompanying comment that shows the state of
 the stack at that point, as well as a number denoting the order of execution.
 
@@ -130,7 +130,7 @@ sucessfully/unsuccessfully/[something else] might affect what you choose to do n
 mechanism for returning small values[^6], and even large values could be returned on the stack. I.e., as the executor
 of a function, you could simply decide that upon finishing a function, instead of erasing *everything* on the
 whiteboard pertaining to the stack frame of that function, you could keep the information regarding the "result" of
-that function, and "adopt"[^12] it into the stack of the calling function. Although it may be natural to allocate space on
+that function, and "adopt"[^7] it into the stack of the calling function. Although it may be natural to allocate space on
 the whiteboard for variables in the order they appear in the function source code, the only important part is that the
 code that interacts with these variables "remembers where they live" i.e., it doesn't really matter where on the stack,
 so long as it's in the stack frame. With this in mind, we can be sure to allocate the memory where the return value
@@ -216,7 +216,7 @@ accidentally end up in the same spot. However, a copy is a copy, and copying it 
 We may have to copy it forward several times, so maybe we should just copy it adjacent to `y` to begin with to avoid
 the possibility of needing to copy it multiple times.
 
-Although a nonstandard compiler extension[^7], what if the size of a variable on the stack isn't known at compile time?
+Although a nonstandard compiler extension[^8], what if the size of a variable on the stack isn't known at compile time?
 e.g., what if the "size of the variable" is dependent upon user input? Consider something *like* this:
 ```c
 void main(int argc, char* argv[]) {
@@ -227,7 +227,7 @@ void main(int argc, char* argv[]) {
 ```
 
 Well, if/when we have a subsequent function call, deciding where to put the label for that function call to begin a new
-stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables[^11]. Also,
+stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables[^9]. Also,
 it sucks that we have to even keep track of the size of these variables for these calculations on the stack, because
 that data might not be something the programmer cares about. If these arrays were known in compile time, we could just
 make sure that all the assembly that gets generated does so in a way that's certain about the size of this variable,
@@ -236,8 +236,8 @@ compile-time buffer sizes, this is one reason why.
 
 This is starting to feel nasty, but it's the brand of nasty that compiler developers deal with, and it might be fair to
 say that a limited amount of nasty is fair in *practice*. If you squint your eyes, what I've described is essentially
-just a stack machine[^8]. Unfortunately, we live in a real, physical, world (yuck). We need to obey the laws of
-physics[^9], and these are implementation details after all. We've designed our computers with the goal of *doing
+just a stack machine[^10]. Unfortunately, we live in a real, physical, world (yuck). We need to obey the laws of
+physics[^11], and these are implementation details after all. We've designed our computers with the goal of *doing
 work*, and we try to limit the amount of *work we need to do to be able to do our work* to a minimum. Given that we're
 talking about memory, things like computer cache/TLB/registers/virtual memory all come to mind and are consequential
 in this situation, although some of this was ""arbitrarily"" designed, e.g., cache was invented because SRAM is
@@ -246,7 +246,7 @@ process relocation (rather than it being done statically in the program, or the 
 was invented due to the inventions of both cache and virtual memory.
 
 There's a lot of things our computers *could do* to be faster, whether it be nasty dynamic stack shenanagains, or
-unpatching various side-channel attacks against our predictive computation systems, but there are reasons not to[^10].
+unpatching various side-channel attacks against our predictive computation systems, but there are reasons not to[^12].
 
 So what other ideas do we have to solve this problem of *dynamic memory allocation*?
 
@@ -272,41 +272,50 @@ stack frames. After all, if the parentmost call to `bar()` has a variable `x` wi
 to `bar()` has the variable `x` with a value of `37`, this *is* valid and fair, and we need to make sure they each have
 their own portion of the stack (i.e., a *stack frame*) to keep their local data separate from each other.
 
-[^2]: The distinction in marker color is simply to indicate that the *name* and *value* of a variable are two distinct
+[^2]: When computer scientists discuss the stack, it's popular to represent the stack as "growing downwards" instead of
+upwards. This is a natural reflection of the fact that in many ABI/computer architecture designs, the larger the stack,
+the "lower" the head of the stack sits in memory. When drawing diagrams that show the layout of a process, this makes
+it more natural to depict it "growing downwards". This is just a preference though, and I prefer to do it in the other
+direction in this case (i.e., growing "up" the whiteboard).
+
+[^3]: The distinction in marker color is simply to indicate that the *name* and *value* of a variable are two distinct
 concepts.
 
-[^3]: "don't have to rely on your poor short-term memory" is an analogy for how the equivalent computer mechanism,
+[^4]: "don't have to rely on your poor short-term memory" is an analogy for how the equivalent computer mechanism,
 [registers](https://en.wikipedia.org/wiki/Processor_register), are primarily for performing small intermediate tasks,
 and there are a finite amount of them, each with a finite size.
 
-[^4]: In many scenarios, the compiler can observe the structure of your code and realize that (e.g., variables
+[^5]: In many scenarios, the compiler can observe the structure of your code and realize that (e.g., variables
 representing an intermediate calculation) don't really *need* to be on the stack, and instead can simply exist in
 registers during their calculation and usage. Conversely, if you have an extremely complex (e.g., math expression) that
 takes up a lot of intermediate calculation space, it's possible that the computer *doesn't have enough registers* to
 hold the intermediate calculations, so the compiler may actually *generate new variables on the stack that didn't exist
 in your source code* to hold the "overflow".
 
-[^5]: When computer scientists discuss the stack, it's popular to represent the stack as "growing downwards" instead of
-upwards. This is a natural reflection of the fact that in many ABI/computer architecture designs, the larger the stack,
-the "lower" the head of the stack sits in memory. When drawing diagrams that show the layout of a process, this makes
-it more natural to depict it "growing downwards".
-
 [^6]: On many computer architectures, there are dedicated register(s) for storing a return value. The idea is that
 after calling a function that returns a value, the caller simply checks that register *for the returned value*.
 
-[^7]: Up to the compiler implementation, `alloca(size_t size)` will dynamically allocate an amount of bytes on the
+[^7]: The "adopting" concept doesn't seem great, because the natural behavior of the stack makes it so that the
+lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
+it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
+
+[^8]: Up to the compiler implementation, `alloca(size_t size)` will dynamically allocate an amount of bytes on the
 stack. This is useful if you don't want to deal with the computational overhead of a heap. In addition to this, there's
 a feature called [VLA](https://en.wikipedia.org/wiki/Variable-length_array) that accomplishes something similar
 with implicit syntax.
 
-[^8]: [Stack machines](https://en.wikipedia.org/wiki/Stack_machine) are theoretical "computers" that were invented on
+[^9]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
+pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
+increasing the size of the stack by a dynamic value rather than a compile time constant.
+
+[^10]: [Stack machines](https://en.wikipedia.org/wiki/Stack_machine) are theoretical "computers" that were invented on
 paper a long time ago. The point of stack machines were to *prove things* about stack machines, that you could then
 use to prove things about *how powerful* programs are, classes of computation (P vs NP etc.) and a bunch of other
 stuff.
 
-[^9]: Citation needed.
+[^11]: Citation needed.
 
-[^10]: The first thing that comes to mind is how we like the programs on our computers to adhere to a set of rules,
+[^12]: The first thing that comes to mind is how we like the programs on our computers to adhere to a set of rules,
 for the sake of inter-process intercompatibility (e.g., .dll/.so). Learn about the concept of
 [ABI](https://en.wikipedia.org/wiki/Application_binary_interface) if you're curious about this. Additionally, ever
 wonder why (x86) linux programs can't run on (x86) windows & vice versa? They're the same computer architecture,
@@ -315,11 +324,3 @@ they *do* use the same assembly/machine code after all. Well, the ABI's are diff
 [PE](https://en.wikipedia.org/wiki/Portable_Executable). (Although windows indirectly supports executing ELF files via
 WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
 [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
-
-[^11]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
-pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
-increasing the size of the stack by a dynamic value rather than a compile time constant.
-
-[^12]: The "adopting" concept doesn't seem great, because the natural behavior of the stack makes it so that the
-lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
-it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
