@@ -130,7 +130,7 @@ sucessfully/unsuccessfully/[something else] might affect what you choose to do n
 mechanism for returning small values[^6], and even large values could be returned on the stack. I.e., as the executor
 of a function, you could simply decide that upon finishing a function, instead of erasing *everything* on the
 whiteboard pertaining to the stack frame of that function, you could keep the information regarding the "result" of
-that function, and "adopt" it into the stack of the calling function. Although it may be natural to allocate space on
+that function, and "adopt"[^12] it into the stack of the calling function. Although it may be natural to allocate space on
 the whiteboard for variables in the order they appear in the function source code, the only important part is that the
 code that interacts with these variables "remembers where they live" i.e., it doesn't really matter where on the stack,
 so long as it's in the stack frame. With this in mind, we can be sure to allocate the memory where the return value
@@ -212,7 +212,9 @@ to overlap `foo_result`, we need to relocate `foo_result` somehow. We could make
 `y + sizeof(foo_result)`, and simply relocate `foo_result` to that saved location if we ever grow large enough. Maybe
 we could relocate it *really really far forward* in the stack. If we do this though, we would need to make sure that
 any other situations where we similarly relocated adopted variables "*really really far forward*" in the stack don't
-accidentally end up in the same spot.
+accidentally end up in the same spot. However, a copy is a copy, and copying it really far forward might not be enough.
+We may have to copy it forward several times, so maybe we should just copy it adjacent to `y` to begin with to avoid
+the possibility of needing to copy it multiple times.
 
 Although a nonstandard compiler extension[^7], what if the size of a variable on the stack isn't known at compile time?
 e.g., what if the "size of the variable" is dependent upon user input? Consider something *like* this:
@@ -225,11 +227,11 @@ void main(int argc, char* argv[]) {
 ```
 
 Well, if/when we have a subsequent function call, deciding where to put the label for that function call to begin a new
-stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables. Also, it
-sucks that we have to even keep track of the size of these variables for these calculations on the stack, because that
-data might not be something the programmer cares about. If these arrays were known in compile time, we could just make
-sure that all the assembly that gets generated does so in a way that's certain about the size of this variable, thus
-relieving us of this extra work (which is the default behavior). If you wonder why classic C code often has
+stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables[^11]. Also,
+it sucks that we have to even keep track of the size of these variables for these calculations on the stack, because
+that data might not be something the programmer cares about. If these arrays were known in compile time, we could just
+make sure that all the assembly that gets generated does so in a way that's certain about the size of this variable,
+thus relieving us of this extra work (which is the default behavior). If you wonder why classic C code often has
 compile-time buffer sizes, this is one reason why.
 
 This is starting to feel nasty, but it's the brand of nasty that compiler developers deal with, and it might be fair to
@@ -260,14 +262,6 @@ typical process.
 
 
 
-
-
-
-
-//put this somewhere?
-The "adopting" concept doesn't seem great, because
-the natural behavior of the stack makes it so that the lifetime of an object is the same as the lifetime of the
-function that created that object, and sometimes we want it to last longer.
 
 
 
@@ -321,3 +315,11 @@ they *do* use the same assembly/machine code after all. Well, the ABI's are diff
 [PE](https://en.wikipedia.org/wiki/Portable_Executable). (Although windows indirectly supports executing ELF files via
 WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
 [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
+
+[^11]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
+pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
+increasing the size of the stack by a dynamic value rather than a compile time constant.
+
+[^12]: The "adopting" concept doesn't seem great, because the natural behavior of the stack makes it so that the
+lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
+it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
