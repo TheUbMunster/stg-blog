@@ -264,13 +264,105 @@ There's a few notable things about the layouts of unix/windows processes:
 the absolute limit for the stack size.
 - In unix, the stack grows towards the heap. This means the "absolulte largest size the stack can be" is a bit less
 obvious. It depends on the size of the heap.
+- In both, similar implicit limits exist for the "Heap".
 - In windows, "Program Image" roughly equates to ".Text" + ".Data" + ".BSS" in unix.
 - "Kernel Memory" in both refers to the memory that the operating system occupies. The kernel memory is in a processes
-virtual memory map for syscalls (I.e., wrappers for "secure methods" of interacting with the operating system that
-requires permission elevation).
+virtual memory map for syscalls[^13].
+
+And guess what? There *is* (essentially) a "second stack" that we can use for our *data* data, it's the heap!
+
+To interact with the heap, on unix there's `s/brk()`, which increases/decreases the size of the heap. `s/brk()` usage
+is often discouraged because it isn't thread safe, and because the "default" C memory allocator `malloc()` uses
+`s/brk()`, so any additional usage of it will mess up `malloc()`[^14]. If we intend to use `s/brk()` for our memory
+allocator, we either need to not include the standard C library (which may be an issue if any libraries we use require
+the library), or we need to make sure our dynamic memory allocator has the *exact* same API as the standard
+implementation, and link against our implementation instead.
+
+On windows, `HeapAlloc()`, `LocalAlloc()` and `GlobalAlloc()`[^15] all interact with the heap, but do so in different
+ways. `malloc()` usually wraps `HeapAlloc()` on windows, and although the problems with `s/brk()` above don't apply due to the presense of actual management with these three functions, I would rather that a cross platform implementation of *my*
+memory allocator use logically similar sources of memory. Although these functions internally manipulate the heap
+directly, there isn't an API method to "`s/brk()`" on windows directly.
+
+`malloc()` is smart in that it makes large increments in `s/brk()` on unix & simply wraps `HeapAlloc()` on windows,
+this prevents heap thrashing[^16] and reduces the number of necessary syscalls. `malloc()` is implementation defined
+though, so you can't always rely on it working this way. Fortunately, the implementers are smart and attempt to back
+`malloc()` with the best solution for the platform.
+
+POSIX[^17] specifies `mmap()`, which allocates more memory pages that exist outside of the Process Memory layout
+diagram above[^18], fetched straight from the kernel's free pages. `mmap()` has some additional features, namely the
+ability to share the memory mapped in this fashion with other processes, allowing these processes the ability to
+communicate with each other as they run.
+
+On windows, `VirtualAlloc()` is very similar to `mmap()` in that it fetches more pages from the kernel. It can even
+lazily allocate memory[^19], and share it with other processes. Both of these features have additional features, and
+I encourage you to do your own reading about these systems.
+
+### Implementation
+
+With either of these functions, for every dynamic value you wish to store, nothing's really stopping you from using the
+page(s) for your single variable, but since mnay values are far less than 4KiB or (page size), this would be very
+wasteful. With this in mind, we know that we'll need to have some internal management mechanism.
+
+My goal was to make a memory allocator that was compatible on both windows and linux and wouldn't interfere with
+`malloc()`, so first I wrote cross-platform methods to allocate and free page(s).
+
+```c
+void* p_alloc(size_t pageCount)
+{
+	void* result;
+	size_t byteCount = pageCount * p_size();
+#if _WIN32
+	result = VirtualAlloc(NULL, byteCount, MEM_COMMIT, PAGE_READWRITE);
+	if (result == NULL)
+	{
+		fprintf(stderr, "Windows Virtual Alloc Failed: %d", GetLastError());
+		exit(-1);
+	}
+#else
+	result = mmap(0, byteCount, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+	if (result == MAP_FAILED)
+	{
+		fprintf(stderr, "POSIX mmap failed: %d", errno);
+		exit(-1);
+	}
+#endif
+	return result;
+}
+```
+
+This page allocation function allocates for you `pageCount` pages in a platform agnostic way. We make sure to set
+appropriate settings (e.g., we do not want to enable the ability for this memory to be executable). I leave `p_free()`
+as an excersize to the reader.
+
+You'll notice that we allocate memory in terms of `pageCount`, which isn't that useful alone. Since we're ultimately
+working with requests in terms of `bytes`, we need a way to know how large a page is on the given platform. Here's how
+I did that.
 
 
+```c
+size_t p_size()
+{
+	static size_t ps = 0;
+#if _WIN32
+	if (ps == 0)
+	{
+		SYSTEM_INFO si;
+		GetSystemInfo(&si);
+		ps = si.dwPageSize;
+	}
+#else
+	if (ps == 0)
+		ps = getpagesize();
+#endif
+	return ps;
+}
+```
 
+Since batching calls (e.g., the way `malloc()` does it) can reduce syscalls, we want to ensure that the several places
+throughout our code where we have to check the size of the pages (so we can calculate the number of bytes we have), is
+fast, and doesn't have too many system calls. Even with the fanciest of operating systems (to my knowledge), changing
+the size of pages on your system would require a system reboot. Thus, we only need to check the page size once (via a
+syscall), and we cache it in a static local and return that cached value for all subsequent calls.
 
 
 
@@ -334,3 +426,25 @@ they *do* use the same assembly/machine code after all. Well, the ABI's are diff
 [PE](https://en.wikipedia.org/wiki/Portable_Executable). (Although windows indirectly supports executing ELF files via
 WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
 [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
+
+[^13]: I.e., wrappers for "secure methods" of interacting with the operating system that requires permission elevation.
+
+[^14]: `malloc()` assumes it has full control of `s/brk()`, so any intermixed calls will lead to invalid program state.
+
+[^15]: https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods
+
+[^16]: Thrashing refers to a scenario where the underlying implementation of a collection that gets repeatedly added
+to and removed from causes repeated expensive operations relating to memory (re)allocation/deallocation (in this case,
+repeated calls to `s/brk()` or `VirtualAlloc()`).
+
+[^17]: POSIX is a collection of features/API that different operating systems can implement for ease of cross-platform
+development and intercompatibility. Many versions of unix are fully/partially POSIX compliant, including linux and
+MacOS.
+
+[^18]: To keep the ledgerging simple, your operating system dispenses memory in entire *pages*. Pages are often 4KiB in
+size, but there are several sizes that you can set.
+
+[^19]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
+to utilize the resource (but it is avaliable if you need it).
+
+# Talk about how the stack hasn't always existed?
