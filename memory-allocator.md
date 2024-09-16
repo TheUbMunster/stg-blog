@@ -35,6 +35,9 @@ void main() {
 }
 ```
 
-Now, imagine that it's *you* doing this work, [not a computer]. [^1]
+Now, imagine that it's *you* doing this work, [not a computer]. 
 
+This is a [hover text](## "your hover text") example.
+
+this text has a footnote[^1]
 [^1]: asdf
