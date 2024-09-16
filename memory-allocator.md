@@ -26,7 +26,7 @@ intentionally, and goes out of its way to do it.
 
 Consider a `main()` function that has a couple of variables at the beginning, followed by a function call:
 
-```
+```c
 void main() {
     int x = 5, y = 10;
     //some stuff...
@@ -34,3 +34,7 @@ void main() {
     //more stuff...
 }
 ```
+
+Now, imagine that it's *you* doing this work, [not a computer]. [^1]
+
+[^1]: asdf
