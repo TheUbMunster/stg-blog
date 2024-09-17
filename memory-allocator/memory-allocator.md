@@ -6,8 +6,8 @@ A memory allocator simply put is the portion of code that almost every program u
 memory for information to live. But before we get into that, I think it's important to talk about the other major place
 memory lives during the lifetime of your program, *the stack*.
 
-Aside: although these concepts are almost universally applicable, I will be discussing the remainder of this post from
-a C/++-esq perspective.
+Aside: although these concepts are almost universally applicable, I will be discussing this post from a C/++-esq
+perspective.
 
 ## The stack
 
@@ -258,7 +258,18 @@ Golly, **what a headache**. It seems to me that separating the portion of memory
 track of control (execution) from the *data* data is a good idea. Lets take a simplified look at how memory is laid
 out for a typical process.
 
-<img align="center" src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
+<picture>
+  <!-- User prefers light mode: -->
+  <source srcset="ProcessLayoutWinUnixLight.png" media="(prefers-color-scheme: light)"/>
+
+  <!-- User prefers dark mode: -->
+  <source srcset="ProcessLayoutWinUnixDark.png"  media="(prefers-color-scheme: dark)"/>
+
+  <!-- User has no color preference: -->
+  <img align="center" src="ProcessLayoutWinUnixLight.png" alt="Diagram of the memory layout of processes on unix and windows"/>
+</picture>
+
+
 
 There's a few notable things about the layouts of unix/windows processes:
 
@@ -383,7 +394,8 @@ struct HeapNodeHeader
 	HeapNodeHeader();
 	HeapNodeHeader(unsigned long long size, bool isCurrentFree);
 	unsigned long long header_data; //stores info like the "size" of this node
-    void* mem; //this member sits at the location of the user's memory. Do not derefence, instead "return &mem".
+	//Do not derefence, instead "return &mem".
+    void* mem; //this member sits at the location of the user's memory.
 
 	bool isImmediatePreviousFree();
 	bool isCurrentFree();
@@ -482,7 +494,12 @@ candidate->myFooter()->header = candidate; //by setting size first, myFooter() p
 ff->header = candidate->immediateNextNeighbor(); //by setting the footer, this points to the location of the new HNH
 HeapNodeHeader* nf = ff->header;
 nf->setCurrentFree(true);
-nf->setSize(oldBigSize - (sizeof(HeapNodeHeader) + sizeof(HeapNodeFooter) + size - sizeof(HeapNodeHeader::HeapNodeMandatoryBody)));
+nf->setSize(
+	oldBigSize - 
+	(sizeof(HeapNodeHeader) + 
+	sizeof(HeapNodeFooter) + 
+	size - 
+	sizeof(HeapNodeHeader::HeapNodeMandatoryBody));
 ```
 
 The above code splits it up into two pieces, and returns the left half for `malloc()`, the right half is the remaining
@@ -531,8 +548,12 @@ leave the next as an excersize to the reader.
 
 //no need to mark prev as free (already free)
 currentNode->myFooter()->header = prevNode; //make current footer point to new head (prev)
-prevNode->setSize(prevNode->size() + currentNode->size()
-    + (sizeof(HeapNodeHeader) - sizeof(HeapNodeHeader::HeapNodeMandatoryBody) + sizeof(HeapNodeFooter))); //update size
+prevNode->setSize(
+	prevNode->size() + 
+	currentNode->size() + 
+	(sizeof(HeapNodeHeader) - 
+	sizeof(HeapNodeHeader::HeapNodeMandatoryBody) + 
+	sizeof(HeapNodeFooter))); //update size
 //prevNode's old footer, and this node's current footer have both been abandoned by this point, no *need* for cleanup
 ```
 
