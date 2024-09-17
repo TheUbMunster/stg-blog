@@ -6,6 +6,8 @@ A memory allocator simply put is the portion of code that almost every program u
 memory for information to live. But before we get into that, I think it's important to talk about the other major place
 memory lives during the lifetime of your program, *the stack*.
 
+<img align="center" src="memory-allocator-icon.png" alt="A computer render of a heap represented as a fragmented block"/>
+
 Aside: although these concepts are almost universally applicable, I will be discussing this post from a C/++-esq
 perspective.
 
