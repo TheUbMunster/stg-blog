@@ -7,7 +7,7 @@ memory for information to live. But before we get into that, I think it's import
 memory lives during the lifetime of your program, *the stack*.
 
 Aside: although these concepts are almost universally applicable, I will be discussing the remainder of this post from
-a C-esq perspective.
+a C/++-esq perspective.
 
 ## The stack
 
@@ -296,8 +296,11 @@ ability to share the memory mapped in this fashion with other processes, allowin
 communicate with each other as they run.
 
 On windows, `VirtualAlloc()` is very similar to `mmap()` in that it fetches more pages from the kernel. It can even
-lazily allocate memory[^20], and share it with other processes. Both of these features have additional features, and
-I encourage you to do your own reading about these systems.
+lazily allocate memory[^20], and share it with other processes. Note that page*s* requested in either of these fasions
+are guaranteed to be consecutive within single calls, but subsequent calls may not be adjacent to pages from a previous
+call. This is more likely to be the case if you have other things in your process calling `VirtualAlloc()`/`mmap()`.
+Additionally, both of these functions have additional features, and I encourage you to do your own reading about these
+systems.
 
 ### Implementation
 
@@ -365,7 +368,190 @@ fast, and doesn't have too many system calls. Even with the fanciest of operatin
 the size of pages on your system would require a system reboot. Thus, we only need to check the page size once (via a
 syscall), and we cache it in a static local and return that cached value for all subsequent calls.
 
-Getting on to the algorithm itself,
+I'd like to get onto the algorithm itself now, but there's an important thing to note. Since we're *writing* a memory
+allocator, that means we can't *use* a/the memory allocator (since it *isn't written yet*). That means whatever data
+structures we decide to use need to be simple, in-place, and need to function with "raw memory". Given that we're
+allocating chunk(s) of pages.
+
+Since one of our goals is to divvy up these large page(s) into small pieces of memory, lets define a "node". Let's say
+this node's responsibility is denoting a "small memory piece", and it has the necessary information to observe adjacent
+nodes too.
+
+```c
+struct HeapNodeHeader
+{
+	HeapNodeHeader();
+	HeapNodeHeader(unsigned long long size, bool isCurrentFree);
+	unsigned long long header_data; //stores info like the "size" of this node
+    void* mem; //this member sits at the location of the user's memory. Do not derefence, instead "return &mem".
+
+	bool isImmediatePreviousFree();
+	bool isCurrentFree();
+	bool isImmediateNextFree();
+
+	unsigned long long size();
+	void setCurrentFree(bool isFree);
+	void setSize(unsigned long long size);
+
+	HeapNodeHeader* immediatePrevNeighbor();
+	HeapNodeHeader* immediateNextNeighbor();
+};
+```
+
+Good. However, lets say that we have a ptr to a `HeapNodeHeader` from one of our pages. How do we find its left/right
+neighbors? We know that these nodes "sit next to each other", but given that these nodes are different sizes (since the
+user requests memory of different sizes), this might cause a problem. We imagine that the *next* neighbor sits at 
+`this + sizeof(HeapNodeHeader) + size()`, but what about the previous neighbor? To know where it sits, we would need
+to know how large it is in order to calculate how far back it is (classic chicken or the egg type problem).
+
+To fix this, let's introduce another data structure.
+
+```c
+struct HeapNodeFooter
+{
+	HeapNodeHeader* header;
+};
+```
+
+What we'll do, is whenever we allocate memory, (via our `malloc()` equivalent), we'll make sure to account for the size
+of both `HeapNodeHeader` and `HeapNodeFooter`. We'll put the `HeapNodeFooter` at the very end of a node. This means, all
+we need to do to get our *previous* neighbor is `((HeapNodeFooter*)(this - sizeof(HeapNodeFooter)))->header`. Easy!
+Modify your `HeapNodeHeader` definitions/implementations appropriately.
+
+At this point, with several nodes, memory would probably look something like this:
+
+```
+=======================================================================================================================
+| HNH | (user memory) | HNF | HNH | (more user memory) | HNF | HNH | (more user memory) | HNF | HNH | (more user mem...
+=======================================================================================================================
+```
+
+At the beginning of our program (perhaps in our heap constructor), lets simply allocate a single page, put a HNH/HNF in
+it and mark it as free.
+
+On a side note, many operating systems enjoy or even require "aligned access" for performance and other reasons. Namely
+we should make sure that every "(user memory)" address sits on a 16-byte aligned address. All this means is that as we
+create HNH/HNF, we should do it in a way where the location of the user memory looks something like `0xABCD0000` (i.e.,
+the address ends in four zeroes, indicating it's evenly divisible by 16). Since the memory page itself is 16-byte
+aligned, but we have a leading HNH before the actual user memory, we need to do things like:
+
+- Artificially introduce padding before the first HNH in a set of page(s) to ensure that
+`sizeof(padding) + sizeof(HeapNodeHeader)` is 16-aligned so that "(user memory)" is *also* 16-aligned
+- Artifically increase the requested size of our `malloc()` call so that the
+`sizeof(user memory) + sizeof(HeapNodeFooter)` will allow the following HNH to also be properly placed, so that *its*
+"(user memory)" is also 16-byte aligned.
+
+In the current implementation, `sizeof(HeapNodeHeader) == 16` (but that includes the size of `mem`, and for intents and
+purposes, `mem` is the *body* of the node, which we don't want to include). So lets say the size of the header is 8,
+and `sizeof(HeapNodeFooter) == 8`. Assuming 4KiB, this means the page at the beginning will be something like:
+
+```
+=======================================================================================================================
+| 8 bytes of padding | HNH |              (giant body comprising almost the whole page)               | HNF | padding |
+=======================================================================================================================
+```
+
+To keep our algorithms simple, the padding at the end of the page exists because we placed the HNF in a way where a HNH
+could be validly placed after it (with correct alignment etc), even though it's the end of a page and there won't ever
+be a HNH there.
+
+Since we artifically inflate the size of nodes to ensure their alignment, this also means that the size of any node
+will be (a multiple of 16) + 8. This means that the size (in binary) will always have three zeroes in the bottom bits.
+Awesome! We can use this extra space for three bitflags. We could use all three bits to store flags, but let's just
+store a bitflag indicating if *this* node is free. If we ever need to check if a neighbor is free, we just access it
+through the footer or size calculation like formerly outlined.
+
+Let's discuss our first allocation. When our `malloc()` is called for the first time, we do have this giant free node.
+We can set the free flag to false, and return `&mem`, but chances are the requested memory size isn't nearly as large
+as the node is in its current state. If we did this, well, we wouldn't be any less better off than just returning the
+entire page for the `malloc()` instead. To make this better, let's cut up the node into two pieces, and give the 
+properly sized node to the caller.
+
+```c
+//make sure it's larger than the mandatory size
+size = (size < sizeof(HeapNodeHeader::HeapNodeMandatoryBody)) ? sizeof(HeapNodeHeader::HeapNodeMandatoryBody) : size;
+size = (size % 16 != 0) ? size + (16 - (size % 16)) : size; //make sure it's a multiple of 16
+
+//if node is large enough to be split into two pieces:
+
+HeapNodeFooter *ff = candidate->myFooter();
+size_t oldBigSize = candidate->size();
+candidate->setSize(size);
+candidate->setCurrentFree(false);
+candidate->myFooter()->header = candidate; //by setting size first, myFooter() points to the location of the new footer
+ff->header = candidate->immediateNextNeighbor(); //by setting the footer, this points to the location of the new HNH
+HeapNodeHeader* nf = ff->header;
+nf->setCurrentFree(true);
+nf->setSize(oldBigSize - (sizeof(HeapNodeHeader) + sizeof(HeapNodeFooter) + size - sizeof(HeapNodeHeader::HeapNodeMandatoryBody)));
+```
+
+The above code splits it up into two pieces, and returns the left half for `malloc()`, the right half is the remaining
+free bit. Note that in the circumstance that the requested size is "pretty large" we need to make sure that there's
+room for a HNH/HNF combo to be interjected in the "body" of the node in this fashion. If we were to do this, and the
+"free bit"'s size was smaller than the minimum size for a node (i.e., 16 bytes in our implementation), then there's
+no point splitting it up, and we may as well just use the whole node for the `malloc()`, even if it's a tiny bit
+oversized. This is fine for our big-O, because this size overhead for these nodes is O(1).
+
+Now that we've split up this node, we could imagine the page looks something like:
+
+```
+=======================================================================================================================
+| 8 bytes of padding | HNH | (user memory) | HNF | HNH |                (free memory)                 | HNF | padding |
+=======================================================================================================================
+```
+
+Now lets say that the user calls our `free()`, the memory looks something like:
+
+```
+=======================================================================================================================
+| 8 bytes of padding | HNH | (free memory) | HNF | HNH |                (free memory)                 | HNF | padding |
+=======================================================================================================================
+```
+
+Now I ask a question: what if the user calls `malloc(approximately sizeof(HNH+HNF+both free memory))`? Conceptually,
+we *do* have enough room in this page for their request, however, what we *have* is two separate nodes, neither of
+which can fit the requested size. What we *could* do, is undo the "splitting" of the free memory into two nodes, and
+combine them back into a single node. This of course only works if the nodes (2+) that we want to merge together are
+all *free* nodes (we don't want to mess with the user's active memory). It would be annoying to start at the beginning
+of the page and walk through all the nodes via `immediateNextNeighbor()` to check for nodes that we could coalesce
+into single nodes, so instead, lets be smart and check for the possibility of coalescing nodes together *whenever a
+node gets freed*.
+
+Whenever a node gets freed, there are four circumstances to consider:
+- it's previous neighbor is free, but it's next neighbor isn't
+- it's previous neighbor isn't free, but it's next is
+- neither neighbor is free
+- both neighbors are free
+
+It's easy to imagine what to do in each of these four circumstances. I'll show what I did for the first case, but I'll
+leave the next as an excersize to the reader.
+
+```c
+//if prev is free, next is not free:
+
+//no need to mark prev as free (already free)
+currentNode->myFooter()->header = prevNode; //make current footer point to new head (prev)
+prevNode->setSize(prevNode->size() + currentNode->size()
+    + (sizeof(HeapNodeHeader) - sizeof(HeapNodeHeader::HeapNodeMandatoryBody) + sizeof(HeapNodeFooter))); //update size
+//prevNode's old footer, and this node's current footer have both been abandoned by this point, no *need* for cleanup
+```
+
+By ensuring this occurs every time we free a node, we've created an invariant in our data structure[^21]. By making
+sure that our avaliable free nodes are always maximally sized, this help us waste less memory by not making unecessary
+requests for more pages.
+
+The one thing that could make this better, would be if we could occasionally copy/paste all the free nodes to one end
+of the page (and coalesce them together), and all the used nodes to the other end of the page. Unfortunately, this
+doesn't work because the pointers we passed via our `malloc()` would no longer point to correct locations. We could
+accomplish this by doubly-indirecting access to the backing user memory. I.e., our `malloc()` returns a `void**`. The
+user would dereference twice to access their memory, and they could safely copy this pointer to share around their
+code. However, we could maintain access to the middle pointer, defragment the heap (i.e., the aforementioned
+copy/paste and movement of the data, and then update the middle pointer to properly point to the new location).
+We would only need to make sure that the inital pointer that points to the middle pointer never changes. In fact,
+this feature of "heap defragmentation" is something that garbage collected memory management[^22] uses all the time.
+
+If you wish to implement a heap in this fashion, go for it! However, you'll be suprised how effective node coalescing
+alone can improve performance, which is what I went with for simplicity.
 
 ## Conclusion
 
@@ -379,8 +565,8 @@ Good luck!
 
 ### Contact
 If I've said something incorrect, or have anything else to say to me, contact me @ 
-[tangleboom@gmail.com](mailto:tangleboom@gmail.com?subject=memory-allocator), I would love to update this post with the
-most accurate information!
+[tangleboom@gmail.com](mailto:tangleboom@gmail.com), I would love to update this post with the most accurate
+information!
 
 ## Footnotes
 
@@ -446,10 +632,11 @@ WSL). Maybe you could write a native ELF executor for windows, or maybe a native
 [^13]: We weren't so lucky to have the ability to store locals like this. Some older computers simply had a stack of
 function labels *only*. You *could* keep track of the order functions were called, and where you needed to return to
 once the current function was over, but when it came to storing memory, you had to figure that out yourself. This was
-usually done by just having some spot in global memory that you stored all your stuff. You needed to make sure that all
-buffers/lists were large enough for any potential computation you could make, because you couldn't really resize them.
-Nothing was stopping you from writing a custom dynamic solution though, and it didn't take very long for this to
-happen.
+sometimes done as (e.g., Algol-58) by having the stack (which was really a linked-list), having a dedicated buffer for
+all local variables. I've also read that this was done by just having some spot in global memory that you stored all
+your stuff (some old IBM mainframe did this IIRC). You needed to make sure that all buffers/lists were large enough for
+any potential computation you could make, because you couldn't really resize them. Nothing was stopping you from
+writing a custom dynamic (memory allocator) solution though, and it didn't take very long for this to happen.
 
 [^14]: I.e., wrappers for "secure methods" of interacting with the operating system that requires permission elevation.
 
@@ -470,5 +657,11 @@ size, but there are several sizes that you can set.
 
 [^20]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
 to utilize the resource (but it is avaliable if you need it).
+
+[^21]: An invariant in a data structure means that the data structure has a certain articulable property that *is
+always true*. In this case, our invariant is that there are never two adjacent free nodes (because if there were,
+our code responsible for merging free nodes would have coalesced them into a single node).
+
+[^22]: [This article](https://blog.gceasy.io/what-is-java-heap-fragmentation/) explains heap fragmentation very simply
 
 [^69]: [Link to paper](https://arxiv.org/abs/2204.10455).
