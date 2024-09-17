@@ -397,7 +397,7 @@ struct HeapNodeHeader
 	HeapNodeHeader(unsigned long long size, bool isCurrentFree);
 	unsigned long long header_data; //stores info like the "size" of this node
 	//Do not derefence, instead "return &mem".
-    void* mem; //this member sits at the location of the user's memory.
+	void* mem; //this member sits at the location of the user's memory.
 
 	bool isImmediatePreviousFree();
 	bool isCurrentFree();
