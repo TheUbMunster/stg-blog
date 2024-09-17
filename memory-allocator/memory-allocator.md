@@ -553,13 +553,138 @@ this feature of "heap defragmentation" is something that garbage collected memor
 If you wish to implement a heap in this fashion, go for it! However, you'll be suprised how effective node coalescing
 alone can improve performance, which is what I went with for simplicity.
 
+We've done well so far, but we still have a looming issue. At the very beginning, we allocated a single page for our
+purposes. What if that isn't enough? Well, we could allocate more pages, but we still have our original pages with
+memory that's being used by the user still, and we're about to add a new one that's going to be utilized too. Since
+we have two blocks of pages, we need to manage them both. Sounds to me like we're going to need a dynamic memory
+structure...
+
+Don't think too hard! Remember the padding we had at the beginning of the pages? What if we use that space to form a
+linked list between our pages? While we're at it, so long as we expand this padding by a multiple of 16, we can
+maintain our important alignment scheme. Here's the data structure I put at the beginning of my page blocks:
+
+```c
+struct PageHeader
+{
+	PageHeader *prev, *next; //linked list of pages.
+	HeapNodeHeader *efl_head, *efl_tail; //*ignore me for now*
+	unsigned long long sizeBytes; //the size of these page(s) in bytes, always a multiple of the OS's p_size()
+	HeapNodeHeader* immediateFirstNode(); //very first element in this page(s) block
+	HeapNodeHeader* immediateLastNode(); //very last element in this page(s) block
+	bool isEntirePageFree(); //do these page(s) consist of a single free HeapNode?
+};
+```
+
+Front and center, we store a doubly linked list connecting all of our pages together. Now we can manage multiple pages.
+Keeping track of them is important, because if a page becomes fully free (and if we have several of them), it would be
+good to free some of them back to the kernel, so it can be used for other processes if necessary. This wasn't obviously
+necessary since all of our `free()` operations would simply take the passed ptr and subtract `sizeof(HeapNodeHeader)`
+to access its HNH.
+
+Our dynamic memory allocator now works! Is there anything else we can do to make it more efficient?
+
+There are several options, but one of the most popular ones is an Explicit Free List implementation. Currently, the
+list of all free nodes that we'd like to consider for `malloc()` is implicit, i.e., we start at the head of the page
+and walk forward until we find a node that can fit our user's request (split it up into two pieces if we can). We can
+do better. In our page header, we have two pointers, `efl_head` & `efl_tail` that store pointers to HNH's of both the
+largest free, and smallest free node in this page block. Initially, with a single free node, both of these pointers
+point to the single giant free node in the page. As the memory allocator gets used, and the page block gets peppered
+with both utilized and free nodes, we can use a convenient trick.
+
+Remember how we enforced a minimum node size? Besides the fact that it would be silly to have a free node with `0`
+size due to the overhead of HNH/HNF, our minimum size due to padding of `16` bytes was coincedentally convenient.
+Pointers 64 bit platforms are 8 bytes, and for free nodes (i.e., the nodes whose body *aren't being used by the
+user*) we can use their body to store a doubly linked list, that connect all of the free nodes together. This means we
+can look through *just* the free nodes when we're looking for a node for a `malloc()` request. Here's an updated form
+of HNH:
+
+```c
+struct HeapNodeHeader
+{
+	HeapNodeHeader();
+	HeapNodeHeader(unsigned long long size, bool isCurrentFree);
+	unsigned long long header_data; //stores info like the "size" and "is this node free"
+	union HeapNodeMandatoryBody
+	{
+		void* mem;
+		struct
+		{
+			//"prev" goes larger, "next" goes smaller
+			HeapNodeHeader *prev, *next;
+		} efl; //explicit free list
+	} content;
+	bool isImmediatePreviousFree();
+	bool isCurrentFree();
+	bool isImmediateNextFree();
+
+	unsigned long long size();
+	void setCurrentFree(bool isFree);
+	void setSize(unsigned long long size);
+
+	HeapNodeHeader* immediatePrevNeighbor();
+	HeapNodeFooter* myFooter();
+	HeapNodeHeader* immediateNextNeighbor();
+};
+```
+
+The user memory pointer, and the explicit free list are in a union together, which saves us space. (After all, we only
+use the EFL if the node is free, so the user isn't using the memory). At this point, whenever we `malloc()` something,
+it's trivial to remove this node from the EFL & stitch the broken ends back together (make sure the update the PH if
+it turns out that this change would change the head or tail of the EFL). However, if we're freeing a node, all we have
+access to (via `ptr - sizeof(HeapNodeHeader)`) is the node's header. If we want to add it to the EFL, we need to find
+another free node in order to walk through the EFL and stitch it into place. However, our invariant guarantees nothing
+about how often a free node occurs. If we have an *extremely large* page block, and as we walk through our
+previous/next neighbors, it may be a long time before we finally find a free node to stitch it into the EFL. By keeping
+track of a doubly linked list of all the pages, we can check if our node lies within the memory range of each of the
+pages (i.e., `ptr > page_header && ptr < page_header + page_header.sizeBytes`), and if so, we can stitch it in via
+accessing the EFL via the pointers stored in the page header.
+
+There's lots of other optimizations we can do (some are mutually exclusive)!
+- ensure that the page headers in the doubly linked list are stored in memory address order, perhaps even implement a
+skip list[^23] to accelerate the search for the correct page header when freeing memory.
+- ensure that the page headers in the doubly linked list are stored in order of their largest or smallest EFL member,
+allowing for a system where searching for a page with a large enough free node is only *just* large enough to fit it,
+saving the larger nodes for other allocations.
+- ensure that all the elements in the EFL are sorted smallest to biggest, so that every time you need to `malloc()`,
+you can check if the largest EFL element in a page block is large enough to fit the request. If not, you know there's
+nothing bigger in the EFL of that page, so you can skip checking it all! Additionally, if your requested size is larger
+than the smallest node in the EFL (but not by very much), you can start at the small end of the EFL and walk in the
+largerward direction until you find the first EFL element that's *just barely* big enough to hold your request, thus
+saving on memory. Similar logic can be applied if the requested size is only slightly smaller than the largest element
+in the EFL.
+- If nodes in the EFL are large enough to support the size (i.e., increase the mandatory size of a heap node to store
+this information on a per-node basis), you can optionally implement a skip list throughout nodes in the EFL.
+- Come up with a heuristic to decide if a search through an EFL can be terminated early, and instead choose an EFL
+element that's "good enough" rather than continuing to waste too much time for little benefit (time/space tradeoff).
+- Check if upon creation of new page blocks, if it's actually adjacent to a previous `mmap()`/`VirtualAlloc()` call,
+and if so, instead adopt one page into the other instead of making a new entry in the page's doubly linked list.
+- Have multiple EFL's per page block, where each EFL has been binned for a certain size of EFL entries, to accelerate
+the EFL search, I would expect this to work well for an *extremely large* page block with a *really long* EFL, by
+splitting the EFL into (e.g.) four separate EFL's, you can expect to speed up you EFL search by 4x!
+
+There are several "typical" designs for dynamic memory allocators, and it's possible that if you go for one design, you
+can still learn something from other designs. Give it a google.
+
+Note that I'm using the term "optimization" a bit loosely here. It's certainly possible that depending on your
+program's memory usage pattern, some of these behaviors would cause worse performance. If you're going out of your way
+to implement a memory allocator for production, I hope you make sure to do some benchmarking!
+
+## Debugging tips
+
+Implement a `heap_check` function, that you can perform on a heap at any time to ensure that the layout of the heap,
+the implications of flags etc. are all consistent. A classic example of what you could do is walk through the page
+block and calculate the sum of all the nodee sizes and ensure it matches the size stored in the page header.
+
+Throughout your code, put assertions (that get stripped in release builds if you want) to make sure that implicit
+assumptions are actually true every step of the way.
+
 ## Conclusion
 
 You can find a full implementation of my heap at https://github.com/TheUbMunster/stg-heap. If this is something you
 choose to undertake, there are several tutorials on the internet about it that talk about the decision making processes
 and many examples to learn from. Make sure to put your own spin on it. Try out an optimization, or a different
 management scheme, perhaps you'll discover something new! A peer of mine not too long ago discovered a management
-scheme that decreases the cost of overall allocations, and people out there are already implementing this scheme[^69]!
+scheme that decreases the cost of overall allocations, and people out there are already implementing this scheme[^24]!
 
 Good luck!
 
@@ -664,4 +789,9 @@ our code responsible for merging free nodes would have coalesced them into a sin
 
 [^22]: [This article](https://blog.gceasy.io/what-is-java-heap-fragmentation/) explains heap fragmentation very simply
 
-[^69]: [Link to paper](https://arxiv.org/abs/2204.10455).
+[^23]: [A skip list](https://en.wikipedia.org/wiki/Skip_list) is a data structure similar to a linked list, except it
+has additional pointers pointing *several spaces* left and right in the linked list, Allowing for a binary search to be
+performed on it. Downside is, your linked list nodes take `O(log(n))` space where `n` is the number of elements in the
+linked list.
+
+[^24]: [Link to paper](https://arxiv.org/abs/2204.10455).
