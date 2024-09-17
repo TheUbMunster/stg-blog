@@ -247,14 +247,16 @@ was invented due to the inventions of both cache and virtual memory.
 
 There's a lot of things our computers *could do* to be faster, whether it be nasty dynamic stack shenanagains, or
 unpatching various side-channel attacks against our predictive computation systems, but there are reasons not to[^12].
+Although it's unfortunate that the stack isn't perfect for everything we'd like to do with it, you should be
+grateful[^13]!
 
 So what other ideas do we have to solve this problem of *dynamic memory allocation*?
 
 ## Dynamic memory allocation
 
 Golly, **what a headache**. It seems to me that separating the portion of memory that seems to be good for keeping
-track of control (execution) from the *data* data is a good idea. Lets take a look at how memory is laid out for a
-typical process.
+track of control (execution) from the *data* data is a good idea. Lets take a simplified look at how memory is laid
+out for a typical process.
 
 <img align="center" src="./ProcessLayoutWinUnix.png" alt="Diagram of the memory layout of processes on unix and windows" />
 
@@ -267,34 +269,34 @@ obvious. It depends on the size of the heap.
 - In both, similar implicit limits exist for the "Heap".
 - In windows, "Program Image" roughly equates to ".Text" + ".Data" + ".BSS" in unix.
 - "Kernel Memory" in both refers to the memory that the operating system occupies. The kernel memory is in a processes
-virtual memory map for syscalls[^13].
+virtual memory map for syscalls[^14].
 
 And guess what? There *is* (essentially) a "second stack" that we can use for our *data* data, it's the heap!
 
 To interact with the heap, on unix there's `s/brk()`, which increases/decreases the size of the heap. `s/brk()` usage
 is often discouraged because it isn't thread safe, and because the "default" C memory allocator `malloc()` uses
-`s/brk()`, so any additional usage of it will mess up `malloc()`[^14]. If we intend to use `s/brk()` for our memory
+`s/brk()`, so any additional usage of it will mess up `malloc()`[^15]. If we intend to use `s/brk()` for our memory
 allocator, we either need to not include the standard C library (which may be an issue if any libraries we use require
 the library), or we need to make sure our dynamic memory allocator has the *exact* same API as the standard
 implementation, and link against our implementation instead.
 
-On windows, `HeapAlloc()`, `LocalAlloc()` and `GlobalAlloc()`[^15] all interact with the heap, but do so in different
+On windows, `HeapAlloc()`, `LocalAlloc()` and `GlobalAlloc()`[^16] all interact with the heap, but do so in different
 ways. `malloc()` usually wraps `HeapAlloc()` on windows, and although the problems with `s/brk()` above don't apply due to the presense of actual management with these three functions, I would rather that a cross platform implementation of *my*
 memory allocator use logically similar sources of memory. Although these functions internally manipulate the heap
 directly, there isn't an API method to "`s/brk()`" on windows directly.
 
 `malloc()` is smart in that it makes large increments in `s/brk()` on unix & simply wraps `HeapAlloc()` on windows,
-this prevents heap thrashing[^16] and reduces the number of necessary syscalls. `malloc()` is implementation defined
+this prevents heap thrashing[^17] and reduces the number of necessary syscalls. `malloc()` is implementation defined
 though, so you can't always rely on it working this way. Fortunately, the implementers are smart and attempt to back
 `malloc()` with the best solution for the platform.
 
-POSIX[^17] specifies `mmap()`, which allocates more memory pages that exist outside of the Process Memory layout
-diagram above[^18], fetched straight from the kernel's free pages. `mmap()` has some additional features, namely the
+POSIX[^18] specifies `mmap()`, which allocates more memory pages that exist outside of the Process Memory layout
+diagram above[^19], fetched straight from the kernel's free pages. `mmap()` has some additional features, namely the
 ability to share the memory mapped in this fashion with other processes, allowing these processes the ability to
 communicate with each other as they run.
 
 On windows, `VirtualAlloc()` is very similar to `mmap()` in that it fetches more pages from the kernel. It can even
-lazily allocate memory[^19], and share it with other processes. Both of these features have additional features, and
+lazily allocate memory[^20], and share it with other processes. Both of these features have additional features, and
 I encourage you to do your own reading about these systems.
 
 ### Implementation
@@ -375,6 +377,11 @@ scheme that decreases the cost of overall allocations, and people out there are 
 
 Good luck!
 
+### Contact
+If I've said something incorrect, or have anything else to say to me, contact me @ 
+[tangleboom@gmail.com](mailto:tangleboom@gmail.com?subject=memory-allocator), I would love to update this post with the
+most accurate information!
+
 ## Footnotes
 
 [^1]: A stack frame is the portion of the stack that stores data pertaining to an instance of a function call. Even if
@@ -436,26 +443,32 @@ they *do* use the same assembly/machine code after all. Well, the ABI's are diff
 WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
 [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
 
-[^13]: I.e., wrappers for "secure methods" of interacting with the operating system that requires permission elevation.
+[^13]: We weren't so lucky to have the ability to store locals like this. Some older computers simply had a stack of
+function labels *only*. You *could* keep track of the order functions were called, and where you needed to return to
+once the current function was over, but when it came to storing memory, you had to figure that out yourself. This was
+usually done by just having some spot in global memory that you stored all your stuff. You needed to make sure that all
+buffers/lists were large enough for any potential computation you could make, because you couldn't really resize them.
+Nothing was stopping you from writing a custom dynamic solution though, and it didn't take very long for this to
+happen.
 
-[^14]: `malloc()` assumes it has full control of `s/brk()`, so any intermixed calls will lead to invalid program state.
+[^14]: I.e., wrappers for "secure methods" of interacting with the operating system that requires permission elevation.
 
-[^15]: [Microsoft docs](https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods).
+[^15]: `malloc()` assumes it has full control of `s/brk()`, so any intermixed calls will lead to invalid program state.
 
-[^16]: Thrashing refers to a scenario where the underlying implementation of a collection that gets repeatedly added
+[^16]: [Microsoft docs](https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods).
+
+[^17]: Thrashing refers to a scenario where the underlying implementation of a collection that gets repeatedly added
 to and removed from causes repeated expensive operations relating to memory (re)allocation/deallocation (in this case,
 repeated calls to `s/brk()` or internal heap manipulation caused by `HeapAlloc()`).
 
-[^17]: POSIX is a collection of features/API that different operating systems can implement for ease of cross-platform
+[^18]: POSIX is a collection of features/API that different operating systems can implement for ease of cross-platform
 development and intercompatibility. Many versions of unix are fully/partially POSIX compliant, including linux and
 MacOS.
 
-[^18]: To keep the ledgerging simple, your operating system dispenses memory in entire *pages*. Pages are often 4KiB in
+[^19]: To keep the ledgerging simple, your operating system dispenses memory in entire *pages*. Pages are often 4KiB in
 size, but there are several sizes that you can set.
 
-[^19]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
+[^20]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
 to utilize the resource (but it is avaliable if you need it).
 
 [^69]: [Link to paper](https://arxiv.org/abs/2204.10455).
-
-# Talk about how the stack hasn't always existed?
