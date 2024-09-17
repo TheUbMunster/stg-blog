@@ -1,12 +1,12 @@
 # Memory Allocation
+<img align="center" src="memory-allocator-icon.png" alt="A computer render of a heap represented as a fragmented block"/>
+
 Have you ever thought about *how you think*? It might be fair to say that computers have no choice, and that includes
 how they "remember things". In this post I'll be talking about how memory allocators work.
 
 A memory allocator simply put is the portion of code that almost every program uses to *dynamically* create sections of
 memory for information to live. But before we get into that, I think it's important to talk about the other major place
 memory lives during the lifetime of your program, *the stack*.
-
-<img align="center" src="memory-allocator-icon.png" alt="A computer render of a heap represented as a fragmented block"/>
 
 Aside: although these concepts are almost universally applicable, I will be discussing this post from a C/++-esq
 perspective.
