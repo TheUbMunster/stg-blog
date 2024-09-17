@@ -445,8 +445,8 @@ it and mark it as free.
 
 On a side note, many operating systems enjoy or even require "aligned access" for performance and other reasons. Namely
 we should make sure that every "(user memory)" address sits on a 16-byte aligned address. All this means is that as we
-create HNH/HNF, we should do it in a way where the location of the user memory looks something like `0xABCD0000` (i.e.,
-the address ends in four zeroes, indicating it's evenly divisible by 16). Since the memory page itself is 16-byte
+create HNH/HNF, we should do it in a way where the location of the user memory looks something like `0x6789ABC0` (i.e.,
+the address ends in 0b0000, indicating it's evenly divisible by 16). Since the memory page itself is 16-byte
 aligned, but we have a leading HNH before the actual user memory, we need to do things like:
 
 - Artificially introduce padding before the first HNH in a set of page(s) to ensure that
