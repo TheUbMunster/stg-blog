@@ -132,7 +132,8 @@ void main() {
 
 ## Data management
 
-put something here
+When managing the information that represents the program state (control), and the program *state* (data), there's lots
+of small and large ideas that have been used over time.
 
 ### Data management approach \#1
 
@@ -299,7 +300,7 @@ this was done for better cache performance, or better/fewer instructions to comp
 and/or computer systems throughout time*. Some of these ideas seem to have matured into [certified bad ideas] at this
 point, but don't knock it yet! These "bad practices" may only be bad due to our arbitrary-ish decision making when it
 comes to our (e.g) ABI designs, hardware architecture designs, or paradigms that evolved over time. Some of these ideas
-may not have been so bad at the time.
+may not have been so bad at the time. A lot of dead weight from the past has yet to leave us.
 
 ## Conclusion
 
