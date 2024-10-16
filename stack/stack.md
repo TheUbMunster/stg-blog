@@ -1,5 +1,5 @@
 # Stacks
-<img align="center" src="stack-icon.png" alt="A computer render of a CS stack represented as a pile of blocks"/>
+<img align="center" src="stack-icon.png" style="max-width: 50%; max-height: 50%; margin: 0px auto 0px auto; display: block;" alt="A computer render of a CS stack represented as a pile of blocks"/>
 
 When achieving *exact* behavior in a computer, keeping track of [everything that can be kept track of] is essential.
 The concept of a stack (the data structure) has been a part of designs for control flow for programs and computers
@@ -62,7 +62,7 @@ to execute `foo()`. Since you've recorded the variables and their values on the 
 to rely on your poor short-term memory[^5] as we shift our focus to completing the task `foo()`.
 
 At this point, your whiteboard looks something like this:
-```
+```text
 y 10
 x 5
 main
@@ -167,7 +167,7 @@ void main() {
 ```
 
 At the very end of main, the stack frame may look something like this:
-```
+```text
 foo_result 5
 foo (ignored)
 y 10
@@ -199,7 +199,7 @@ void main() {
 ```
 
 Walking through a similar thought process, at the very end of main, the stack frame may look something like this:
-```
+```text
 foo_result 5 //formerly bar_result, formerly z
 bar (ignored)
 //some other large stack frame data...
@@ -245,7 +245,8 @@ e.g., what if the "size of the variable" is dependent upon user input? Consider 
 void main(int argc, char* argv[]) {
     //safety concerns aside...
     int size = atoi(argv[1]);
-    char buffer[size]; //this normally wouldn't compile since its size is not a ctc
+    //this normally wouldn't compile since its size is not a ctc
+    char buffer[size];
 }
 ```
 
@@ -325,75 +326,75 @@ If I've said something incorrect, or have anything else to say to me, contact me
 [tangleboom@gmail.com](mailto:tangleboom@gmail.com), I would love to update this post with the most accurate
 information!
 
-## Footnotes
+<!--## Footnotes-->
 
 [^1]: Not only has the stack been around since the 50's (invented by Friedrich Bauer), he's also responsible for the
-entire concept of a "stack machine", as well as many other ideas that have stuck around up to today.
+    entire concept of a "stack machine", as well as many other ideas that have stuck around up to today.
 
 [^2]: A stack frame is the portion of the stack that stores data pertaining to an instance of a function call. Even if
-e.g. `bar()` is called, and then `bar()` calls itself again, the two instances of the `bar()` calls each have their own
-stack frames. After all, if the parentmost call to `bar()` has a variable `x` with a value of `12`, and the nested call
-to `bar()` has the variable `x` with a value of `37`, this *is* valid and fair, and we need to make sure they each have
-their own portion of the stack (i.e., a *stack frame*) to keep their local data separate from each other.
+    e.g. `bar()` is called, and then `bar()` calls itself again, the two instances of the `bar()` calls each have their own
+    stack frames. After all, if the parentmost call to `bar()` has a variable `x` with a value of `12`, and the nested call
+    to `bar()` has the variable `x` with a value of `37`, this *is* valid and fair, and we need to make sure they each have
+    their own portion of the stack (i.e., a *stack frame*) to keep their local data separate from each other.
 
 [^3]: When computer scientists discuss the stack, it's popular to represent the stack as "growing downwards" instead of
-upwards. This is a natural reflection of the fact that in many ABI/computer architecture designs, the larger the stack,
-the "lower" the head of the stack sits in memory. When drawing diagrams that show the layout of a process, this makes
-it more natural to depict it "growing downwards". This is just a preference though, and I prefer to do it in the other
-direction in this case (i.e., growing "up" the whiteboard).
+    upwards. This is a natural reflection of the fact that in many ABI/computer architecture designs, the larger the stack,
+    the "lower" the head of the stack sits in memory. When drawing diagrams that show the layout of a process, this makes
+    it more natural to depict it "growing downwards". This is just a preference though, and I prefer to do it in the other
+    direction in this case (i.e., growing "up" the whiteboard).
 
 [^4]: The distinction in marker color is simply to indicate that the *name* and *value* of a variable are two distinct
-concepts.
+    concepts.
 
 [^5]: "don't have to rely on your poor short-term memory" is an analogy for how the equivalent computer mechanism,
-[registers](https://en.wikipedia.org/wiki/Processor_register), are primarily for performing small intermediate tasks,
-and there are a finite amount of them, each with a finite size.
+    [registers](https://en.wikipedia.org/wiki/Processor_register), are primarily for performing small intermediate tasks,
+    and there are a finite amount of them, each with a finite size.
 
 [^6]: In many scenarios, the compiler can observe the structure of your code and realize that (e.g., variables
-representing an intermediate calculation) don't really *need* to be on the stack, and instead can simply exist in
-registers during their calculation and usage. Conversely, if you have an extremely complex (e.g., math expression) that
-takes up a lot of intermediate calculation space, it's possible that the computer *doesn't have enough registers* to
-hold the intermediate calculations, so the compiler may actually *generate new variables on the stack that didn't exist
-in your source code* to hold the "overflow".
+    representing an intermediate calculation) don't really *need* to be on the stack, and instead can simply exist in
+    registers during their calculation and usage. Conversely, if you have an extremely complex (e.g., math expression) that
+    takes up a lot of intermediate calculation space, it's possible that the computer *doesn't have enough registers* to
+    hold the intermediate calculations, so the compiler may actually *generate new variables on the stack that didn't exist
+    in your source code* to hold the "overflow".
 
 [^7]: On many computer architectures, there are dedicated register(s) for storing a return value. The idea is that
-after calling a function that returns a value, the caller simply checks that register *for the returned value*.
+    after calling a function that returns a value, the caller simply checks that register *for the returned value*.
 
 [^8]: The "adopting" concept doesn't seem great, because the natural behavior of the stack makes it so that the
-lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
-it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
+    lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
+    it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
 
 [^9]: Up to the compiler implementation, `alloca(size_t size)` will dynamically allocate an amount of bytes on the
-stack. This is useful if you don't want to deal with the computational overhead of a heap. In addition to this, there's
-a feature called [VLA](https://en.wikipedia.org/wiki/Variable-length_array) that accomplishes something similar
-with implicit syntax.
+    stack. This is useful if you don't want to deal with the computational overhead of a heap. In addition to this, there's
+    a feature called [VLA](https://en.wikipedia.org/wiki/Variable-length_array) that accomplishes something similar
+    with implicit syntax.
 
 [^10]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
-pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
-increasing the size of the stack by a dynamic value rather than a compile time constant.
+    pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
+    increasing the size of the stack by a dynamic value rather than a compile time constant.
 
 [^11]: [Stack machines](https://en.wikipedia.org/wiki/Stack_machine) are theoretical "computers" that were invented on
-paper a long time ago. The point of stack machines were to *prove things* about stack machines, that you could then
-use to prove things about *how powerful* programs are, classes of computation (P vs NP etc.) and a bunch of other
-stuff.
+    paper a long time ago. The point of stack machines were to *prove things* about stack machines, that you could then
+    use to prove things about *how powerful* programs are, classes of computation (P vs NP etc.) and a bunch of other
+    stuff.
 
 [^12]: Citation needed.
 
 [^13]: The first thing that comes to mind is how we like the programs on our computers to adhere to a set of rules,
-for the sake of inter-process intercompatibility (e.g., .dll/.so). Learn about the concept of
-[ABI](https://en.wikipedia.org/wiki/Application_binary_interface) if you're curious about this. Additionally, ever
-wonder why (x86) linux programs can't run on (x86) windows & vice versa? They're the same computer architecture,
-they *do* use the same assembly/machine code after all. Well, the ABI's are different, but linux uses
-[ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) for executable files, and windows uses 
-[PE](https://en.wikipedia.org/wiki/Portable_Executable). (Although windows indirectly supports executing ELF files via
-WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
-[fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
+    for the sake of inter-process intercompatibility (e.g., .dll/.so). Learn about the concept of
+    [ABI](https://en.wikipedia.org/wiki/Application_binary_interface) if you're curious about this. Additionally, ever
+    wonder why (x86) linux programs can't run on (x86) windows & vice versa? They're the same computer architecture,
+    they *do* use the same assembly/machine code after all. Well, the ABI's are different, but linux uses
+    [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) for executable files, and windows uses 
+    [PE](https://en.wikipedia.org/wiki/Portable_Executable). (Although windows indirectly supports executing ELF files via
+    WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
+    [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
 
 [^14]: We weren't so lucky to have the ability to store locals like this. Some older computers simply had a stack of
-function labels *only*. You *could* keep track of the order functions were called, and where you needed to return to
-once the current function was over, but when it came to storing memory, you had to figure that out yourself. This was
-sometimes done as (e.g., Algol-58) by having the stack (which was really a linked-list), having a dedicated buffer for
-all local variables. I've also read that this was done by just having some spot in global memory that you stored all
-your stuff (some old IBM mainframe did this IIRC). You needed to make sure that all buffers/lists were large enough for
-any potential computation you could make, because you couldn't really resize them. Nothing was stopping you from
-writing a custom dynamic (memory allocator) solution though, and it didn't take very long for this to happen.
+    function labels *only*. You *could* keep track of the order functions were called, and where you needed to return to
+    once the current function was over, but when it came to storing memory, you had to figure that out yourself. This was
+    sometimes done as (e.g., Algol-58) by having the stack (which was really a linked-list), having a dedicated buffer for
+    all local variables. I've also read that this was done by just having some spot in global memory that you stored all
+    your stuff (some old IBM mainframe did this IIRC). You needed to make sure that all buffers/lists were large enough for
+    any potential computation you could make, because you couldn't really resize them. Nothing was stopping you from
+    writing a custom dynamic (memory allocator) solution though, and it didn't take very long for this to happen.

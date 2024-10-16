@@ -1,12 +1,12 @@
 # Memory Allocation
-<img align="center" src="memory-allocator-icon.png" alt="A computer render of a heap represented as a fragmented block"/>
+<img align="center" src="memory-allocator-icon.png" style="max-width: 50%; max-height: 50%; margin: 0px auto 0px auto; display: block;" alt="A computer render of a heap represented as a fragmented block"/>
 
 Have you ever thought about *how you think*? It might be fair to say that computers have no choice! Computers are very exact,
 and do exactly what they're told to do. This includes how computers "remember things". There are various methods for how to
 accomplish memory management in a computer, in a former post I talked about how ***the stack*** works. In this post I'll be
 talking about how memory allocators work.
 
-If you read my previous blog post about [***the stack***](https://www.tangleboom.com/misc/invalidlink.html), or you know how
+If you read my previous blog post about [***the stack***](./blog.html?post=stack), or you know how
 it works, then you understand how much of the memory that exists in the stack isn't "data" (although some of it is), but
 *metadata* instead. This metadata consists of things like return addresses, unnamed intermediate values for calculations,
 debug information, and many other things irrelevant to the *actual data* for your program. Even worse, it makes sense to
@@ -27,7 +27,7 @@ lets first take a simplified look at how memory is laid out for a typical proces
   <source srcset="ProcessLayoutWinUnixDark.png"  media="(prefers-color-scheme: dark)"/>
 
   <!-- User has no color preference: -->
-  <img align="center" src="ProcessLayoutWinUnixLight.png" alt="Diagram of the memory layout of processes on unix and windows"/>
+  <img align="center" src="ProcessLayoutWinUnixLight.png" style="max-width: 50%; max-height: 50%; margin: 0px auto 0px auto; display: block;" alt="Diagram of the memory layout of processes on unix and windows"/>
 </picture>
 
 
@@ -197,7 +197,7 @@ Modify your `HeapNodeHeader` definitions/implementations appropriately.
 
 At this point, with several nodes, memory would probably look something like this:
 
-```
+```text
 =======================================================================================================================
 | HNH | (user memory) | HNF | HNH | (more user memory) | HNF | HNH | (more user memory) | HNF | HNH | (more user mem...
 =======================================================================================================================
@@ -222,7 +222,7 @@ In the current implementation, `sizeof(HeapNodeHeader) == 16` (but that includes
 purposes, `mem` is the *body* of the node, which we don't want to include). So lets say the size of the header is 8,
 and `sizeof(HeapNodeFooter) == 8`. Assuming 4KiB, this means the page at the beginning will be something like:
 
-```
+```text
 =======================================================================================================================
 | 8 bytes of padding | HNH |              (giant body comprising almost the whole page)               | HNF | padding |
 =======================================================================================================================
@@ -276,7 +276,7 @@ oversized. This is fine for our big-O, because this size overhead for these node
 
 Now that we've split up this node, we could imagine the page looks something like:
 
-```
+```text
 =======================================================================================================================
 | 8 bytes of padding | HNH | (user memory) | HNF | HNH |                (free memory)                 | HNF | padding |
 =======================================================================================================================
@@ -284,7 +284,7 @@ Now that we've split up this node, we could imagine the page looks something lik
 
 Now lets say that the user calls our `free()`, the memory looks something like:
 
-```
+```text
 =======================================================================================================================
 | 8 bytes of padding | HNH | (free memory) | HNF | HNH |                (free memory)                 | HNF | padding |
 =======================================================================================================================
@@ -479,7 +479,7 @@ If I've said something incorrect, or have anything else to say to me, contact me
 [tangleboom@gmail.com](mailto:tangleboom@gmail.com), I would love to update this post with the most accurate
 information!
 
-## Footnotes
+<!--## Footnotes-->
 
 [^1]: I.e., wrappers for "secure methods" of interacting with the operating system that requires permission elevation.
 
@@ -488,28 +488,28 @@ information!
 [^3]: [Microsoft docs](https://learn.microsoft.com/en-us/windows/win32/memory/comparing-memory-allocation-methods).
 
 [^4]: Thrashing refers to a scenario where the underlying implementation of a collection that gets repeatedly added
-to and removed from causes repeated expensive operations relating to memory (re)allocation/deallocation (in this case,
-repeated calls to `s/brk()` or internal heap manipulation caused by `HeapAlloc()`).
+    to and removed from causes repeated expensive operations relating to memory (re)allocation/deallocation (in this case,
+    repeated calls to `s/brk()` or internal heap manipulation caused by `HeapAlloc()`).
 
 [^5]: POSIX is a collection of features/API that different operating systems can implement for ease of cross-platform
-development and intercompatibility. Many versions of unix are fully/partially POSIX compliant, including linux and
-MacOS.
+    development and intercompatibility. Many versions of unix are fully/partially POSIX compliant, including linux and
+    MacOS.
 
 [^6]: To keep the ledgerging simple, your operating system dispenses memory in entire *pages*. Pages are often 4KiB in
-size, but there are several sizes that you can set.
+    size, but there are several sizes that you can set.
 
 [^7]: Lazy allocation/initialization/computation refers to the idea of beginning a task, not certain if you're going
-to utilize the resource (but it is avaliable if you need it).
+    to utilize the resource (but it is avaliable if you need it).
 
 [^8]: An invariant in a data structure means that the data structure has a certain articulable property that *is
-always true*. In this case, our invariant is that there are never two adjacent free nodes (because if there were,
-our code responsible for merging free nodes would have coalesced them into a single node).
+    always true*. In this case, our invariant is that there are never two adjacent free nodes (because if there were,
+    our code responsible for merging free nodes would have coalesced them into a single node).
 
 [^9]: [This article](https://blog.gceasy.io/what-is-java-heap-fragmentation/) explains heap fragmentation very simply
 
 [^10]: [A skip list](https://en.wikipedia.org/wiki/Skip_list) is a data structure similar to a linked list, except it
-has additional pointers pointing *several spaces* left and right in the linked list, Allowing for a binary search to be
-performed on it. Downside is, your linked list nodes take `O(log(n))` space where `n` is the number of elements in the
-linked list.
+    has additional pointers pointing *several spaces* left and right in the linked list, Allowing for a binary search to be
+    performed on it. Downside is, your linked list nodes take `O(log(n))` space where `n` is the number of elements in the
+    linked list.
 
 [^11]: [Link to paper](https://arxiv.org/abs/2204.10455).
