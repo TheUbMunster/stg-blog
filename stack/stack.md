@@ -4,8 +4,8 @@
 When achieving *exact* behavior in a computer, keeping track of [everything that can be kept track of] is essential.
 The concept of a stack (the data structure) has been a part of designs for control flow for programs and computers
 since the mid 50's[^1]. Keeping track of a program's control flow using a stack allowed for concepts like recursion,
-intermediate state, and even application specific features to naturally appear, and is fundamental to the implementation
-of most computers. In this post I'll be talking about how the stack works.
+intermediate state, and even application specific features to naturally appear. It is fundamental to the design &
+implementation of most computers. In this post I'll be talking about how the stack works.
 
 ## The stack
 
@@ -23,7 +23,8 @@ caller is as you left it. Although this seems natural, our computers make sure t
 intentionally, and goes out of its way to do it.
 
 This is especially true of control flow, which is the concept regarding how your program flows from "task to task",
-including "what conditions were met" to make any particular task occur.
+including "what conditions were met" to make any particular task occur. The numbers crunched to determine what portion
+of code should be executed is accomplished the same way that "data itself" (that your program operates on) is crunched.
 
 Consider a `main()` function that has a couple of variables at the beginning, followed by a function call:
 
@@ -44,8 +45,7 @@ computations. Not only is it important you keep track of where you decide to rec
 important you record the information necessary to disambiguate `x` from `y`, and whatever other variables you might
 have. In a computer, the names themselves aren't very important, but you do need to remember that any particular
 variable (e.g., `x`) corresponds to a specific memory address. You can call it whatever you want, but since a memory
-address is simply a number, we might just refer to `x` by the address where it sits in memory. This distinction is
-important, as we'll see later.
+address is simply a number, we might just refer to `x` by the address where it sits in memory.
 
 Now realize that once you call `foo()`, you now have a whole extra sequence of instructions to complete. `foo()` may
 even contain other function calls, which contain more variables and more function calls. It's a mess! Organization is
@@ -76,7 +76,7 @@ this function was called from to continue working on the program (in this case, 
 the purpose of `foo()` was to fulfill a task, and now that we're done, any text on the whiteboard corresponding to this
 call to `foo()` (i.e., its stack frame) can be erased, since we're done with it.
 
-Note that any creation of data (compiler optimizations aside[^6]) results of stuff getting put on the stack. Here's an
+Note that any creation of data (compiler optimizations aside[^6]) results in stuff getting put on the stack. Here's an
 expanded example of `main()` above, each significant line of code has an accompanying comment that shows the state of
 the stack at that point, as well as a number denoting the order of execution.
 
@@ -135,15 +135,16 @@ void main() {
 When managing the information that represents the program state (control), and the program *state* (data), there's lots
 of small and large ideas that have been used over time.
 
-### Data management approach \#1
-
 Critically, not only can functions "perform tasks", but they can "perform tasks, and report back some information".
 After all, if it were you performing this work, it would be resonable if executing a function
-sucessfully/unsuccessfully/[something else] might affect what you choose to do next. Computers do have a simple
-mechanism for returning small values[^7], and even large values could be returned on the stack. I.e., as the executor
-of a function, you could simply decide that upon finishing a function, instead of erasing *everything* on the
-whiteboard pertaining to the stack frame of that function, you could keep the information regarding the "result" of
-that function, and "adopt"[^8] it into the stack of the calling function.
+sucessfully/unsuccessfully/[something else] might affect what you choose to do next. Computers do have a native
+mechanism for returning small values[^7], and even large values could be returned on the stack.
+
+### Potential data management approach \#1
+
+As the executor of a function, you could simply decide that upon finishing a function, instead of erasing *everything*
+on the whiteboard pertaining to the stack frame of that function, you could keep the information regarding the "result"
+of that function, and "adopt"[^8] it into the stack of the calling function.
 
 Although it may be natural to allocate space on the whiteboard for variables in the order they appear in the function
 source code, the only important part is that the code that interacts with these variables "remembers where they live"
@@ -221,7 +222,7 @@ the stack in a certain way. What if `main()` calls `bar()` directly, or what if 
 `bar()` recursively? Although it *is* possible to keep track of when/how things need to be moved around to prevent
 data from getting squashed, **this sucks**.
 
-### Data management approach \#2
+### Potential data management approach \#2
 
 What if instead of "adopting" the variable into `main()`'s stack frame, we just let it exist out there in no-mans land.
 This means we can let the stack grow from `y`, and all we need to do is make sure that if the stack grows large enough
@@ -234,47 +235,47 @@ We may have to copy it forward several times, so maybe we should just copy it ad
 the possibility of needing to copy it multiple times.
 
 I don't think we need to explore this option much further, it doesn't seem to work well. Approaches like #1 and #2
-are more common when the compiler makes optimizations for "leaf methods", but are usually unsafe unless a system was
-designed from the ground up with them in mind.
+could be more feasible when the compiler makes optimizations for "leaf methods"[^9], but would probably be unsafe 
+unless a system was designed for those types of optimizations in mind.
 
-### Data management approach \#3
+### Potential data management approach \#3
 
-Although a nonstandard compiler extension[^9], what if the size of a variable on the stack isn't known at compile time?
+Although a nonstandard compiler extension[^10], what if the size of a variable on the stack isn't known at compile time?
 e.g., what if the "size of the variable" is dependent upon user input? Consider something *like* this:
 ```c
 void main(int argc, char* argv[]) {
     //safety concerns aside...
     int size = atoi(argv[1]);
-    //this normally wouldn't compile since its size is not a ctc
+    //this normally wouldn't compile since "size" is not a compile-time constant
     char buffer[size];
 }
 ```
 
 Well, if/when we have a subsequent function call, deciding where to put the label for that function call to begin a new
-stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables[^10]. Also,
+stack frame requires *checking* and *adding together* the lengths of these variably sized stack variables[^11]. Also,
 it sucks that we have to even keep track of the size of these variables for these calculations on the stack, because
 that data might not be something the programmer cares about. If these arrays were known in compile time, we could just
 make sure that all the assembly that gets generated does so in a way that's certain about the size of this variable,
-thus relieving us of this extra work (which is the default behavior). If you wonder why classic C code often has
-compile-time buffer sizes, this is one reason why.
+thus relieving us of this extra work (which is the default behavior). If you wonder why classic C code has compile-time
+buffer sizes, this is one reason why.
 
-### Data management approach \#4
+### Potential data management approach \#4
 
 One of the smarter methods to deal with the above problem(s) when it comes to data management within the stack, is to
 pre-allocate the space needed for variables ASAP. The second control flow deterministically leads to any particular
 outcome that results in the need for [room to be made for some data], instead of waiting, we can just make that room
 *now*. One example of this is how some functions have a return type. It's size is known at compile-time, and once
-control flow deterministically leads to that function call, we can make room on the stack for the return value *before
-we even call the function*. When the function does return, we can ensure that the function places the result into memory
-negatively relative to the base of the current stack frame, and then return. We can also ensure that any function call
-for this function has a similar treatment to "pre-setup" before the function call.
+control flow leads to that function call, we can make room on the stack for the return value *before we even call the
+function*. When the function does return, we can ensure that the function places the result into memory negatively
+relative to the base of the stack frame, and then return. We can also ensure that any function call for this function
+has a similar treatment to "pre-setup" before the function call.
 
 ## So what?
 
 This is starting to feel nasty, but it's the brand of nasty that compiler developers deal with, and it might be fair to
 say that a limited amount of nasty is fair in *practice*. If you squint your eyes, some of what I've described is
-remeniscent of a stack machine[^11]. Unfortunately, we live in a real, physical, world (yuck). We need to obey the laws
-of physics[^12], and these are implementation details after all. We've designed our computers with the goal of *doing
+remeniscent of a stack machine[^12]. Unfortunately, we live in a real, physical, world (yuck). We need to obey the laws
+of physics[^13], and these are implementation details after all. We've designed our computers with the goal of *doing
 work*, and we try to limit the amount of *work we need to do to be able to do our work* to a minimum.
 
 Given that we're talking about memory, a lot of the strange decisions that get made in some implementations were
@@ -286,9 +287,9 @@ use it for cache and use DRAM for the main system memory.
 - TLB was invented to accelerate virtual memory usage, and was inspired by the invention of cache.
 
 There's a lot of things our computers *could do* to be faster, whether it be nasty dynamic stack shenanagains, or
-unpatching various side-channel attacks against our predictive computation systems, but there are reasons not to[^13].
+unpatching various side-channel attacks against our predictive computation systems, but there are reasons not to[^14].
 Although it's unfortunate that the stack isn't perfect for everything we'd like to do with it, you should be
-grateful[^14]!
+grateful[^15]!
 
 At this point, it seems like this is just a list of "potentially useful musings". Accurate! As we computer scientists
 have gotten a handle on what good memory management looks like, we've evolved through several ideas. Sometimes we have
@@ -301,7 +302,7 @@ this was done for better cache performance, or better/fewer instructions to comp
 and/or computer systems throughout time*. Some of these ideas seem to have matured into [certified bad ideas] at this
 point, but don't knock it yet! These "bad practices" may only be bad due to our arbitrary-ish decision making when it
 comes to our (e.g) ABI designs, hardware architecture designs, or paradigms that evolved over time. Some of these ideas
-may not have been so bad at the time. A lot of dead weight from the past has yet to leave us.
+may not have been so bad at the time. A *lot* of dead weight from the past has yet to leave us.
 
 ## Conclusion
 
@@ -364,23 +365,27 @@ information!
     lifetime of an object is the same as the lifetime of the function that created that object, and sometimes we want
     it to last longer. Although "adopting" it accomplishes this, it isn't a naturally arising behavior.
 
-[^9]: Up to the compiler implementation, `alloca(size_t size)` will dynamically allocate an amount of bytes on the
+[^9]: A leaf method is a function that calls no functions. This is significant because you know that for "this call
+    stack", this is the deepest that it will get, which means that the stack frame for this leaf method could take
+    as much space as it wants. This also means that caller-saved registers aren't really a concern.
+
+[^10]: Up to the compiler implementation, `alloca(size_t size)` will dynamically allocate an amount of bytes on the
     stack. This is useful if you don't want to deal with the computational overhead of a heap. In addition to this, there's
     a feature called [VLA](https://en.wikipedia.org/wiki/Variable-length_array) that accomplishes something similar
     with implicit syntax.
 
-[^10]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
+[^11]: This is usually implicitly done, i.e., the register that holds the address of "the top of the stack" is usually
     pre-emptively updated whenever a local variable is created on the stack. The critical difference, is that we'd be
     increasing the size of the stack by a dynamic value rather than a compile time constant.
 
-[^11]: [Stack machines](https://en.wikipedia.org/wiki/Stack_machine) are theoretical "computers" that were invented on
+[^12]: [Stack machines](https://en.wikipedia.org/wiki/Stack_machine) are theoretical "computers" that were invented on
     paper a long time ago. The point of stack machines were to *prove things* about stack machines, that you could then
     use to prove things about *how powerful* programs are, classes of computation (P vs NP etc.) and a bunch of other
     stuff.
 
-[^12]: Citation needed.
+[^13]: Citation needed.
 
-[^13]: The first thing that comes to mind is how we like the programs on our computers to adhere to a set of rules,
+[^14]: The first thing that comes to mind is how we like the programs on our computers to adhere to a set of rules,
     for the sake of inter-process intercompatibility (e.g., .dll/.so). Learn about the concept of
     [ABI](https://en.wikipedia.org/wiki/Application_binary_interface) if you're curious about this. Additionally, ever
     wonder why (x86) linux programs can't run on (x86) windows & vice versa? They're the same computer architecture,
@@ -390,7 +395,7 @@ information!
     WSL). Maybe you could write a native ELF executor for windows, or maybe a native PE executor for linux! Maybe look into
     [fat binaries](https://en.wikipedia.org/wiki/Fat_binary)?
 
-[^14]: We weren't so lucky to have the ability to store locals like this. Some older computers simply had a stack of
+[^15]: We weren't so lucky to have the ability to store locals like this. Some older computers simply had a stack of
     function labels *only*. You *could* keep track of the order functions were called, and where you needed to return to
     once the current function was over, but when it came to storing memory, you had to figure that out yourself. This was
     sometimes done as (e.g., Algol-58) by having the stack (which was really a linked-list), having a dedicated buffer for
